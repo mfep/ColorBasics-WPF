@@ -51,16 +51,19 @@
         <StatusBar Grid.Row="3" HorizontalAlignment="Stretch" Name="statusBar" VerticalAlignment="Bottom" Background="White" Foreground="{StaticResource MediumGreyBrush}">
             <StatusBarItem Content="{Binding StatusText}" />
         </StatusBar>
-        <Slider x:Name="cannyThresholdSlider" HorizontalAlignment="Left" Margin="10,10.333,0,0" Grid.Row="1" VerticalAlignment="Top" Width="311" SmallChange="0.05" Value="{Binding CannyThreshold}" Maximum="1000" Minimum="50"/>
+        <Slider x:Name="cannyThresholdSlider" HorizontalAlignment="Left" Margin="10,10.333,0,0" Grid.Row="1" VerticalAlignment="Top" Width="242" SmallChange="0.05" Value="{Binding CannyThreshold}" Maximum="1000" Minimum="50"/>
         <TextBlock x:Name="textBlock" HorizontalAlignment="Left" Margin="10,33.333,0,0" Grid.Row="1" TextWrapping="Wrap" Text="CannyThreshold: " VerticalAlignment="Top" Width="93"/>
         <TextBox x:Name="cannyThresholdTextBox" HorizontalAlignment="Left" Height="23" Margin="165,31.333,0,0" Grid.Row="1" TextWrapping="Wrap" VerticalAlignment="Top" Width="49" IsEnabled="False"/>
-        <Slider x:Name="cannyThresholdLinkingSlider" HorizontalAlignment="Left" Margin="10,78.333,0,0" Grid.Row="1" VerticalAlignment="Top" Width="311" SmallChange="0.05" Value="{Binding CannyThresholdLinking}" Maximum="1000" Minimum="50"/>
+        <Slider x:Name="cannyThresholdLinkingSlider" HorizontalAlignment="Left" Margin="10,78.333,0,0" Grid.Row="1" VerticalAlignment="Top" Width="242" SmallChange="0.05" Value="{Binding CannyThresholdLinking}" Maximum="1000" Minimum="50"/>
         <TextBlock x:Name="textBlock_Copy" HorizontalAlignment="Left" Margin="10,101.333,0,0" Grid.Row="1" TextWrapping="Wrap" Text="CannyThresholdLinking: " VerticalAlignment="Top" Width="138"/>
         <TextBox x:Name="cannyThresholdLinkingTextBox" HorizontalAlignment="Left" Height="23" Margin="165,101.333,0,0" Grid.Row="1" TextWrapping="Wrap" Text="0" VerticalAlignment="Top" Width="49" IsEnabled="False"/>
         <Viewbox HorizontalAlignment="Left" Height="325" Margin="10,129.333,0,0" Grid.Row="1" VerticalAlignment="Top" Width="433">
             <Image x:Name="colorImage" Source="{Binding ImageSource}" Stretch="UniformToFill" MouseDown="Image_MouseDown"/>
         </Viewbox>
-        <CheckBox x:Name="colorCheckBox" Content="Color" HorizontalAlignment="Left" Margin="368,56.333,0,0" Grid.Row="1" VerticalAlignment="Top" IsChecked="True"/>
-        <CheckBox x:Name="infraredCheckBox" Content="Infrared" HorizontalAlignment="Left" Margin="368,81.333,0,0" Grid.Row="1" VerticalAlignment="Top" IsChecked="True"/>
+        <CheckBox x:Name="colorCheckBox" Content="Color" HorizontalAlignment="Left" Margin="368,81.333,0,0" Grid.Row="1" VerticalAlignment="Top" IsChecked="False"/>
+        <CheckBox x:Name="infraredCheckBox" Content="Infrared" HorizontalAlignment="Left" Margin="368,106.333,0,0" Grid.Row="1" VerticalAlignment="Top" IsChecked="True"/>
+        <Slider x:Name="slider" HorizontalAlignment="Left" Margin="300,10.333,0,0" Grid.Row="1" VerticalAlignment="Top" Width="117" Minimum="1" Maximum="6" Value="{Binding InfraMultiplier}"/>
+        <TextBlock x:Name="textBlock_Copy1" HorizontalAlignment="Left" Margin="300,31.333,0,0" Grid.Row="1" TextWrapping="Wrap" Text="InfraMultiplier" VerticalAlignment="Top" Width="93"/>
+        <CheckBox x:Name="depthCheckBox" Content="Depth" HorizontalAlignment="Left" Margin="368,61.333,0,0" Grid.Row="1" VerticalAlignment="Top" IsChecked="True"/>
     </Grid>
 </Window>
