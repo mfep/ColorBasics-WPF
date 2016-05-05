@@ -27,13 +27,15 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using Emgu.CV.Util;
     using Emgu.CV.UI;
 
+    using Kolos;
+
     /// <summary>
     /// Interaction logic for MainWindow
     /// </summary>
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
-        const int imageSizeX = 480;
-        const int imageSizeY = 270;
+        const int imageSizeX = 512;
+        const int imageSizeY = 424;
         IntPtr convertedColorDataPtr = IntPtr.Zero;
 		IntPtr convertedInfraredDataPtr = IntPtr.Zero;
         double cannyThreshold = 200.0;
@@ -52,7 +54,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private ColorFrameReader colorFrameReader = null;
         private InfraredFrameReader infraredFrameReader = null;
         private DepthFrameReader depthFrameReader = null;
-
+        private MultiSourceFrameReader multiSourceFrameReader = null;
         /// <summary>
         /// Bitmap to display
         /// </summary>
@@ -75,12 +77,13 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             this.colorFrameReader = this.kinectSensor.ColorFrameSource.OpenReader();
             this.infraredFrameReader = this.kinectSensor.InfraredFrameSource.OpenReader();
             this.depthFrameReader = this.kinectSensor.DepthFrameSource.OpenReader();
+            this.multiSourceFrameReader = this.kinectSensor.OpenMultiSourceFrameReader(FrameSourceTypes.Infrared | FrameSourceTypes.Depth);
 
             // wire handler for frame arrival
             this.colorFrameReader.FrameArrived += this.Reader_ColorFrameArrived;
             this.infraredFrameReader.FrameArrived += this.Reader_InfraredFrameArrived;
             this.depthFrameReader.FrameArrived += this.Reader_DepthFrameArrived;
-
+            this.multiSourceFrameReader.MultiSourceFrameArrived += this.Reader_MultiSourceFrameArrived; 
             // create the colorFrameDescription from the ColorFrameSource using Bgra format
             FrameDescription colorFrameDescription = this.kinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
 
@@ -105,7 +108,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             CannyThreshold = 100;
             CannyThresholdLinking = 100;
-        }
+        }        
 
         /// <summary>
         /// INotifyPropertyChangedPropertyChanged event to allow window controls to bind to changeable data
@@ -240,7 +243,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
 					infraredFrame?.CopyFrameDataToIntPtr(infraredMat.DataPointer, infraredFrameDescription.LengthInPixels * 2);
 
-					ProcessInfraredMat(infraredMat);
+					TriangleFromInfrared(infraredMat);
 
 					CvInvoke.Imshow("infrared", infraredMat);
 				}					
@@ -282,27 +285,25 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                                                             : Properties.Resources.SensorNotAvailableStatusText;
         }
 				
-		private void ProcessInfraredMat(Mat infraredMat)
+		private Triangle2DF TriangleFromInfrared(Mat infraredMat)
 		{
 			Image<Gray, short> infraredImg = infraredMat.ToImage<Gray, short>();
 			var smoothedInfraredImg = infraredImg.PyrDown();
 			smoothedInfraredImg = smoothedInfraredImg.PyrUp();					
 
-			//using (Mat smoothedMat = smoot)
 			using (Mat convertedMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1))
-			//using (Mat cannyMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1))
+            using (Mat multiplierMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1))
             {
-				infraredImg.Mat.ConvertTo(convertedMat, DepthType.Cv8U, 1d / 256d);
+                infraredImg.Mat.ConvertTo(convertedMat, DepthType.Cv8U, 1d / 256d);
 
-                Mat multiplierMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1);
                 multiplierMat.SetTo(new MCvScalar(infraMultiplier));
 
-                CvInvoke.Multiply(convertedMat, multiplierMat, convertedMat);            
-                CvInvoke.Imshow("infrared -> converted", convertedMat);
+                CvInvoke.Multiply(convertedMat, multiplierMat, convertedMat);
+                //CvInvoke.Imshow("infrared -> converted", convertedMat);
 
                 Mat thresholdMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1);
                 CvInvoke.Threshold(convertedMat, thresholdMat, 230, 255, ThresholdType.Binary);
-                CvInvoke.Imshow("infrared -> converted -> threshold", thresholdMat);
+                //CvInvoke.Imshow("infrared -> converted -> threshold", thresholdMat);
 
                 //CvInvoke.Canny(thresholdMat, cannyMat, cannyThreshold, cannyThresholdLinking);
 
@@ -326,14 +327,16 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     }
                 }
 
-                var biggestTri = triangleList.OrderBy((tri) => tri.Area).FirstOrDefault();                
-                CvInvoke.Polylines(thresholdMat, Array.ConvertAll(biggestTri.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
+                var biggestTri = triangleList.OrderBy((tri) => tri.Area).FirstOrDefault();
+                //CvInvoke.Polylines(thresholdMat, Array.ConvertAll(biggestTri.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
 
                 //foreach (var triangle in triangleList) {
                 //    CvInvoke.Polylines(cannyMat, Array.ConvertAll(triangle.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
-                //}
+                //}            
+                //CvInvoke.Imshow("threshold", thresholdMat);
 
-                CvInvoke.Imshow("infrared -> converted -> canny(tris)", thresholdMat);
+                return biggestTri;
+                
                 #endregion
             }
         }
@@ -457,6 +460,93 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         {
             var pos = e.GetPosition(this.colorImage);
             inspectColorPosition = new System.Drawing.Point((int)Math.Round(pos.X), (int)Math.Round(pos.Y));                        
+        }
+
+        private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
+        {
+            var multiFrame = e.FrameReference.AcquireFrame();
+
+            using (var infraredFrame = multiFrame.InfraredFrameReference.AcquireFrame())
+            using (var depthFrame = multiFrame.DepthFrameReference.AcquireFrame())
+            {
+                if (infraredFrame == null || depthFrame == null)
+                    return;
+
+                var frameSize = new System.Drawing.Size(infraredFrame.FrameDescription.Width, infraredFrame.FrameDescription.Height);
+                var frameDataLength = infraredFrame.FrameDescription.BytesPerPixel * infraredFrame.FrameDescription.LengthInPixels;
+
+                using (Mat triMaskMat = new Mat(frameSize, DepthType.Cv8U, 1))
+                using (Mat infraredMat = new Mat(frameSize, DepthType.Cv16U, 1))
+                using (Mat maskedInfraredMat = new Mat(frameSize, DepthType.Cv16U, 1))
+                using (Mat depthMat = new Mat(frameSize, DepthType.Cv16U, 1)) {
+                    infraredFrame.CopyFrameDataToIntPtr(infraredMat.DataPointer, frameDataLength);
+                    depthFrame.CopyFrameDataToIntPtr(depthMat.DataPointer, frameDataLength);
+                    triMaskMat.SetTo(new MCvScalar(0));
+                    maskedInfraredMat.SetTo(new MCvScalar(0));
+
+                    var tri = TriangleFromInfrared(infraredMat);
+
+                    CvInvoke.FillConvexPoly(triMaskMat, new VectorOfPoint(Array.ConvertAll(tri.GetVertices(), System.Drawing.Point.Round)), new MCvScalar(255));
+
+                    DisplayDepthHSV(depthMat);
+                    //CvInvoke.Imshow("triangle", DisplayTriangleOnInfrared(infraredMat, tri));
+                    //CvInvoke.Imshow("infrared", infraredMat);
+                    CvInvoke.Imshow("depth", depthMat);
+                }
+            }
+        }
+
+        private Mat DisplayTriangleOnInfrared(Mat infraredMat, Triangle2DF tri)
+        {
+            using (Mat convertMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1)) {
+                infraredMat.ConvertTo(convertMat, DepthType.Cv8U, 1 / 256d);
+                Mat displayMat = new Mat(infraredMat.Size, DepthType.Cv8U, 3);
+                CvInvoke.CvtColor(convertMat, displayMat, ColorConversion.Gray2Bgr);
+                CvInvoke.Polylines(displayMat, Array.ConvertAll(tri.GetVertices(), System.Drawing.Point.Round), true, new Bgr(0, 0, 255).MCvScalar, 2);
+                return displayMat;
+            }
+        }
+
+        private void DisplayDepthHSV(Mat depthMat16U)
+        {
+            if (depthMat16U == null)
+                return;
+
+            using (Mat convertedMat8U = new Mat(depthMat16U.Size, DepthType.Cv8U, 1))
+            using (Mat colorMat8U3 = new Mat(depthMat16U.Size, DepthType.Cv8U, 3))
+            using (Mat hsvMat8U3 = new Mat(depthMat16U.Size, DepthType.Cv8U, 3))
+            using (Mat hsvConstantMat = new Mat(depthMat16U.Size, DepthType.Cv8U, 3))
+            {
+                depthMat16U.ConvertTo(convertedMat8U, DepthType.Cv8U, 1 / 256d);
+                CvInvoke.CvtColor(convertedMat8U, colorMat8U3, ColorConversion.Gray2Bgr);
+
+                hsvConstantMat.SetTo(new MCvScalar(0, 255, 255));
+                CvInvoke.BitwiseOr(colorMat8U3, hsvConstantMat, hsvMat8U3);
+
+                CvInvoke.CvtColor(hsvMat8U3, hsvMat8U3, ColorConversion.Hsv2Bgr);
+
+                DisplayMatOnBitmap(hsvMat8U3, this.colorBitmap);
+                InspectDepthPixel(depthMat16U);
+            }
+        }
+
+        private void InspectDepthPixel(Mat depthMat16U)
+        {
+            if (inspectColorPosition == null || depthMat16U == null)
+                return;
+
+            var pos = inspectColorPosition.Value;
+            if (pos.X >= depthMat16U.Cols || pos.Y >= depthMat16U.Rows)
+                return;
+
+            Console.WriteLine($"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}");
+            inspectColorPosition = null;
+        }
+
+        private unsafe ushort GetMatElementU16(Mat mat, int x, int y)            
+        {
+            ushort* dataPtr = (ushort*)mat.DataPointer;
+            return *(dataPtr + x + mat.Cols * y);
         }
     }
 }
