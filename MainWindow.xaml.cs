@@ -8,26 +8,19 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
-    using System.Diagnostics;
-    using System.Globalization;
-    using System.IO;
     using System.Windows;
     using System.Windows.Media;
     using System.Windows.Media.Imaging;
     using System.Runtime.InteropServices;
     using Microsoft.Kinect;
-    using System.Threading.Tasks;
-    using System.Drawing;
+    using System.Threading.Tasks;    
 
     using System.Linq;
 
     using Emgu.CV;
     using Emgu.CV.Structure;
     using Emgu.CV.CvEnum;
-    using Emgu.CV.Util;
-    using Emgu.CV.UI;
-
-    using Kolos;
+    using Emgu.CV.Util;    
 
     /// <summary>
     /// Interaction logic for MainWindow
@@ -43,6 +36,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         double infraMultiplier = 3.0;
         System.Drawing.Point? inspectColorPosition = null;
         byte[] filterHsv = new byte[] { 60, 255, 255 };
+        PointF[] cameraSpaceTable = null;
         /// <summary>
         /// Active Kinect sensor
         /// </summary>
@@ -108,6 +102,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             CannyThreshold = 100;
             CannyThresholdLinking = 100;
+            kinectSensor.CoordinateMapper.CoordinateMappingChanged += CoordinateMappingChangedCallback;
         }        
 
         /// <summary>
@@ -486,14 +481,52 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
                     var tri = TriangleFromInfrared(infraredMat);
 
-                    CvInvoke.FillConvexPoly(triMaskMat, new VectorOfPoint(Array.ConvertAll(tri.GetVertices(), System.Drawing.Point.Round)), new MCvScalar(255));
+                    //CvInvoke.FillConvexPoly(triMaskMat, new VectorOfPoint(Array.ConvertAll(tri.GetVertices(), System.Drawing.Point.Round)), new MCvScalar(255));
 
                     DisplayDepthHSV(depthMat);
-                    //CvInvoke.Imshow("triangle", DisplayTriangleOnInfrared(infraredMat, tri));
+                    CalculateNormal(depthMat, tri);
+                    CvInvoke.Imshow("triangle", DisplayTriangleOnInfrared(infraredMat, tri));
                     //CvInvoke.Imshow("infrared", infraredMat);
-                    CvInvoke.Imshow("depth", depthMat);
+                    //CvInvoke.Imshow("depth", depthMat);
                 }
             }
+        }
+
+        private void CalculateNormal(Mat depthMat, Triangle2DF tri)
+        {
+            if (depthMat == null || (tri.Centeroid.X == 0 && tri.Centeroid.Y == 0))
+                return;
+
+            var vertices = Array.ConvertAll(tri.GetVertices(), System.Drawing.Point.Round);
+            var point2dList = vertices;// Kolos.haromszog.belsopontok(vertices);
+
+            #region Kolos normalvektor
+            //var point3dList = new List<Kolos.pont3d>();
+
+            //foreach (var point2d in point2dList) {
+            //    var zcoord = GetMatElementU16(depthMat, point2d.X, point2d.Y);
+            //    if(zcoord != 0)
+            //        point3dList.Add(CalculateWorldPosition(point2d.X, point2d.Y, depthMat.Cols, zcoord));
+            //}
+
+            //var normal = Kolos.normalvektor.kiszamitas(point3dList);
+            //Console.WriteLine($"Normálvektor X:{normal[0].ToString("F4")} Y:{normal[1].ToString("F4")}, Z: {normal[2].ToString("F4")}");
+            #endregion
+
+
+            MCvPoint3D32f[] vertices3d = new MCvPoint3D32f[3];
+            for (int i = 0; i < 3; i++) {
+                var point2d = point2dList[i];
+                var zcoord = GetMatElementU16(depthMat, point2d.X, point2d.Y);
+                if (zcoord == 0)
+                    return;
+                var point3d = CalculateWorldPosition(point2d.X, point2d.Y, depthMat.Cols, zcoord);
+                vertices3d[i] = new MCvPoint3D32f((float)point3d.x, (float)point3d.y, (float)point3d.z);
+            }
+            
+            var tri3d = new Triangle3DF(vertices3d[0], vertices3d[1], vertices3d[2]);
+            var normal = tri3d.Normal;
+            Console.WriteLine($"Normal: X:{normal.X} Y:{normal.Y} Z:{normal.Z}");
         }
 
         private Mat DisplayTriangleOnInfrared(Mat infraredMat, Triangle2DF tri)
@@ -523,7 +556,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 hsvConstantMat.SetTo(new MCvScalar(0, 255, 255));
                 CvInvoke.BitwiseOr(colorMat8U3, hsvConstantMat, hsvMat8U3);
 
-                CvInvoke.CvtColor(hsvMat8U3, hsvMat8U3, ColorConversion.Hsv2Bgr);
+                CvInvoke.CvtColor(hsvMat8U3, hsvMat8U3, ColorConversion.Hsv2Bgr);                
 
                 DisplayMatOnBitmap(hsvMat8U3, this.colorBitmap);
                 InspectDepthPixel(depthMat16U);
@@ -539,8 +572,21 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             if (pos.X >= depthMat16U.Cols || pos.Y >= depthMat16U.Rows)
                 return;
 
-            Console.WriteLine($"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}");
+            //Console.WriteLine($"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}");
+            var worldPos = CalculateWorldPosition(pos.X, pos.Y, depthMat16U.Cols, GetMatElementU16(depthMat16U, pos.X, pos.Y));
+            Console.WriteLine($"Clicked World pos: X:{worldPos.x} Y:{worldPos.y} Z:{worldPos.z}");
             inspectColorPosition = null;
+        }
+
+        private Kolos.pont3d CalculateWorldPosition(int screenX, int screenY, int width, ushort depthValue)
+        {
+            PointF lookupValue = cameraSpaceTable[screenX + screenY * width];
+            return new Kolos.pont3d(lookupValue.X * depthValue, lookupValue.Y * depthValue, depthValue);
+        }
+
+        private void CoordinateMappingChangedCallback(object sender, CoordinateMappingChangedEventArgs args)
+        {
+            cameraSpaceTable = kinectSensor.CoordinateMapper.GetDepthFrameToCameraSpaceTable();
         }
 
         private unsafe ushort GetMatElementU16(Mat mat, int x, int y)            
