@@ -5,9 +5,9 @@ using System.Linq;
 
 namespace Kolos
 {
-    public struct pont3d
+    public struct Pont3d
     {
-        public pont3d(double x, double y, double z)
+        public Pont3d(double x, double y, double z)
         {
             this.x = x;
             this.y = y;
@@ -17,18 +17,18 @@ namespace Kolos
         public double y;
         public double z;
     }
-    public static class normalvektor
+    public static class Normalvektor
     {
         private static double[] normalas(double x, double y, double z)
         {
-            double hosssz = Math.Sqrt(x * x + y * y + z * z);
+            double hossz = Math.Sqrt(x * x + y * y + z * z);
             var tomb = new double[3];
-            tomb[0] = x / hosssz;
-            tomb[1] = y / hosssz;
-            tomb[2] = z / hosssz;
+            tomb[0] = x / hossz;
+            tomb[1] = y / hossz;
+            tomb[2] = z / hossz;
             return tomb;
         }
-        public static double[] kiszamitas(List<pont3d> lista)
+        public static double[] kiszamitas(List<Pont3d> lista)
         {
             double sumxx = lista.Sum(p3d => p3d.x * p3d.x);
             double sumyy = lista.Sum(p3d => p3d.y * p3d.y);
@@ -43,14 +43,8 @@ namespace Kolos
 
         }
     }
-    public static class haromszog
+    public static class Haromszog
     {
-        /// <summary>
-        /// Megadja a háromszög belsõ, egész szám koordinátájú pontjait
-        /// </summary>
-        /// <param name="csucsok"></param> A háromszög csúcsat tartalmazó lista
-        /// <param name="offset"></param> A háromszögön belülü eltolás mértéke, hogy mennyire bent lévõ pontok feleljenek meg, 0 és 1 közötti érték
-        /// <returns></returns>
         public static List<Point> belsopontok(Point[] csucsok)
         {
             int xmax = Math.Max(csucsok[0].X, Math.Max(csucsok[1].X, csucsok[2].X));

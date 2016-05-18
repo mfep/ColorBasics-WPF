@@ -27,16 +27,29 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     /// </summary>
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
+        /// <summary>
+        /// Width of the depth/infrared image in pixels
+        /// </summary>
         const int imageSizeX = 512;
+        /// <summary>
+        /// Height of the depth/infrared image in pixels
+        /// </summary>
         const int imageSizeY = 424;
         IntPtr convertedColorDataPtr = IntPtr.Zero;
 		IntPtr convertedInfraredDataPtr = IntPtr.Zero;
         double cannyThreshold = 200.0;
         double cannyThresholdLinking = 200.0;
         double infraMultiplier = 3.0;
-        System.Drawing.Point? inspectColorPosition = null;
         byte[] filterHsv = new byte[] { 60, 255, 255 };
+        /// <summary>
+        /// Pixel position of the point that needs to be inspected in the next frame
+        /// </summary>
+        System.Drawing.Point? inspectPosition = null;
+        /// <summary>
+        /// Array holding the data needed for the screen->world transformation
+        /// </summary>
         PointF[] cameraSpaceTable = null;
+
         /// <summary>
         /// Active Kinect sensor
         /// </summary>
@@ -45,10 +58,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// <summary>
         /// Reader for color frames
         /// </summary>
+        /// 
+        private MultiSourceFrameReader multiSourceFrameReader = null;
         private ColorFrameReader colorFrameReader = null;
         private InfraredFrameReader infraredFrameReader = null;
         private DepthFrameReader depthFrameReader = null;
-        private MultiSourceFrameReader multiSourceFrameReader = null;
         /// <summary>
         /// Bitmap to display
         /// </summary>
@@ -77,7 +91,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             this.colorFrameReader.FrameArrived += this.Reader_ColorFrameArrived;
             this.infraredFrameReader.FrameArrived += this.Reader_InfraredFrameArrived;
             this.depthFrameReader.FrameArrived += this.Reader_DepthFrameArrived;
-            this.multiSourceFrameReader.MultiSourceFrameArrived += this.Reader_MultiSourceFrameArrived; 
+            this.multiSourceFrameReader.MultiSourceFrameArrived += this.Reader_MultiSourceFrameArrived;
             // create the colorFrameDescription from the ColorFrameSource using Bgra format
             FrameDescription colorFrameDescription = this.kinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
 
@@ -358,7 +372,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                         CvInvoke.Resize(convertedImage_Bgr, resizedImage, new System.Drawing.Size(imageSizeX, imageSizeY));
 
 
-                        if(inspectColorPosition != null) {
+                        if(inspectPosition != null) {
                             InspectPixel(resizedImage);
                         }
                     }
@@ -420,11 +434,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
         private void InspectPixel(Mat mat)
         {
-            if (inspectColorPosition == null)
+            if (inspectPosition == null)
                 return;
 
-            var colorPos = inspectColorPosition ?? new System.Drawing.Point(0, 0);
-            inspectColorPosition = null;
+            var colorPos = inspectPosition ?? new System.Drawing.Point(0, 0);
+            inspectPosition = null;
 
             var image = mat.ToImage<Bgr, byte>();
 
@@ -454,7 +468,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private void Image_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             var pos = e.GetPosition(this.colorImage);
-            inspectColorPosition = new System.Drawing.Point((int)Math.Round(pos.X), (int)Math.Round(pos.Y));                        
+            inspectPosition = new System.Drawing.Point((int)Math.Round(pos.X), (int)Math.Round(pos.Y));                        
         }
 
         private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
@@ -565,23 +579,23 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
         private void InspectDepthPixel(Mat depthMat16U)
         {
-            if (inspectColorPosition == null || depthMat16U == null)
+            if (inspectPosition == null || depthMat16U == null)
                 return;
 
-            var pos = inspectColorPosition.Value;
+            var pos = inspectPosition.Value;
             if (pos.X >= depthMat16U.Cols || pos.Y >= depthMat16U.Rows)
                 return;
 
             //Console.WriteLine($"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}");
             var worldPos = CalculateWorldPosition(pos.X, pos.Y, depthMat16U.Cols, GetMatElementU16(depthMat16U, pos.X, pos.Y));
             Console.WriteLine($"Clicked World pos: X:{worldPos.x} Y:{worldPos.y} Z:{worldPos.z}");
-            inspectColorPosition = null;
+            inspectPosition = null;
         }
 
-        private Kolos.pont3d CalculateWorldPosition(int screenX, int screenY, int width, ushort depthValue)
+        private Kolos.Pont3d CalculateWorldPosition(int screenX, int screenY, int width, ushort depthValue)
         {
             PointF lookupValue = cameraSpaceTable[screenX + screenY * width];
-            return new Kolos.pont3d(lookupValue.X * depthValue, lookupValue.Y * depthValue, depthValue);
+            return new Kolos.Pont3d(lookupValue.X * depthValue, lookupValue.Y * depthValue, depthValue);
         }
 
         private void CoordinateMappingChangedCallback(object sender, CoordinateMappingChangedEventArgs args)
