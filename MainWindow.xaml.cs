@@ -20,11 +20,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using Emgu.CV;
     using Emgu.CV.Structure;
     using Emgu.CV.CvEnum;
-    using Emgu.CV.Util;    
+    using Emgu.CV.Util;
 
-    /// <summary>
-    /// Interaction logic for MainWindow
-    /// </summary>
+    #region fields
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         /// <summary>
@@ -35,11 +33,13 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// Height of the depth/infrared image in pixels
         /// </summary>
         const int imageSizeY = 424;
+
         IntPtr convertedColorDataPtr = IntPtr.Zero;
 		IntPtr convertedInfraredDataPtr = IntPtr.Zero;
-        double cannyThreshold = 200.0;
-        double cannyThresholdLinking = 200.0;
-        double infraMultiplier = 3.0;
+
+        /// <summary>
+        /// Stores the currently selected HSV color to inspect
+        /// </summary>
         byte[] filterHsv = new byte[] { 60, 255, 255 };
         /// <summary>
         /// Pixel position of the point that needs to be inspected in the next frame
@@ -71,53 +71,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// <summary>
         /// Current status text to display
         /// </summary>
-        private string statusText = null;
-
-        /// <summary>
-        /// Initializes a new instance of the MainWindow class.
-        /// </summary>
-        public MainWindow()
-        {            
-            // get the kinectSensor object
-            this.kinectSensor = KinectSensor.GetDefault();
-
-            // open the reader for the color frames
-            this.colorFrameReader = this.kinectSensor.ColorFrameSource.OpenReader();
-            this.infraredFrameReader = this.kinectSensor.InfraredFrameSource.OpenReader();
-            this.depthFrameReader = this.kinectSensor.DepthFrameSource.OpenReader();
-            this.multiSourceFrameReader = this.kinectSensor.OpenMultiSourceFrameReader(FrameSourceTypes.Infrared | FrameSourceTypes.Depth);
-
-            // wire handler for frame arrival
-            this.colorFrameReader.FrameArrived += this.Reader_ColorFrameArrived;
-            this.infraredFrameReader.FrameArrived += this.Reader_InfraredFrameArrived;
-            this.depthFrameReader.FrameArrived += this.Reader_DepthFrameArrived;
-            this.multiSourceFrameReader.MultiSourceFrameArrived += this.Reader_MultiSourceFrameArrived;
-            // create the colorFrameDescription from the ColorFrameSource using Bgra format
-            FrameDescription colorFrameDescription = this.kinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
-
-            // create the bitmap to display
-            this.colorBitmap = new WriteableBitmap(imageSizeX, imageSizeY, 96.0, 96.0, PixelFormats.Bgr24, null);
-            //this.colorBitmap = new WriteableBitmap(colorFrameDescription.Width / 2, colorFrameDescription.Height / 2, 96.0, 96.0, PixelFormats.Bgr32, null);
-            // set IsAvailableChanged event notifier
-            this.kinectSensor.IsAvailableChanged += this.Sensor_IsAvailableChanged;
-
-            // open the sensor
-            this.kinectSensor.Open();
-
-            // set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
-                                                            : Properties.Resources.NoSensorStatusText;
-
-            // use the window object as the view model in this simple example
-            this.DataContext = this;
-
-            // initialize the components (controls) of the window
-            this.InitializeComponent();
-
-            CannyThreshold = 100;
-            CannyThresholdLinking = 100;
-            kinectSensor.CoordinateMapper.CoordinateMappingChanged += CoordinateMappingChangedCallback;
-        }        
+        private string statusText = null;    
 
         /// <summary>
         /// INotifyPropertyChangedPropertyChanged event to allow window controls to bind to changeable data
@@ -134,7 +88,10 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 return this.colorBitmap;
             }
         }
-
+        double cannyThreshold = 200.0;
+        /// <summary>
+        /// [GET/SET] The canny threshold used in the EmguCV Canny edge detection algorithm
+        /// </summary>
         public double CannyThreshold
         {
             get
@@ -147,6 +104,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 this.cannyThresholdTextBox.Text = value.ToString();
             }
         }
+
+        double cannyThresholdLinking = 200.0;        
+        /// <summary>
+        /// [GET/SET] The canny threshold linking used in the EmguCV Canny edge detection algorithm
+        /// </summary>
         public double CannyThresholdLinking
         {
             get
@@ -159,6 +121,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 this.cannyThresholdLinkingTextBox.Text = cannyThresholdLinking.ToString();
             }
         }
+
+        double infraMultiplier = 3.0;
+        /// <summary>
+        /// [GET/SET] the multiplier value applied to converted (8bit)
+        /// </summary>
         public double InfraMultiplier
         {
             get
@@ -193,6 +160,55 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 }
             }
         }
+        #endregion
+        #region constructor
+        /// <summary>
+        /// Initializes a new instance of the MainWindow class.
+        /// </summary>
+        public MainWindow()
+        {
+            // get the kinectSensor object
+            this.kinectSensor = KinectSensor.GetDefault();
+
+            // open the reader for the color frames
+            this.colorFrameReader = this.kinectSensor.ColorFrameSource.OpenReader();
+            this.infraredFrameReader = this.kinectSensor.InfraredFrameSource.OpenReader();
+            this.depthFrameReader = this.kinectSensor.DepthFrameSource.OpenReader();
+            this.multiSourceFrameReader = this.kinectSensor.OpenMultiSourceFrameReader(FrameSourceTypes.Infrared | FrameSourceTypes.Depth);
+
+            // wire handler for frame arrival
+            this.colorFrameReader.FrameArrived += this.Reader_ColorFrameArrived;
+            this.infraredFrameReader.FrameArrived += this.Reader_InfraredFrameArrived;
+            this.depthFrameReader.FrameArrived += this.Reader_DepthFrameArrived;
+            this.multiSourceFrameReader.MultiSourceFrameArrived += this.Reader_MultiSourceFrameArrived;
+
+            //event handler for the coordinate changed callback
+            kinectSensor.CoordinateMapper.CoordinateMappingChanged += CoordinateMappingChangedCallback;
+            // create the colorFrameDescription from the ColorFrameSource using Bgra format
+            FrameDescription colorFrameDescription = this.kinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
+
+            // create the bitmap to display
+            this.colorBitmap = new WriteableBitmap(imageSizeX, imageSizeY, 96.0, 96.0, PixelFormats.Bgr24, null);
+
+            // set IsAvailableChanged event notifier
+            this.kinectSensor.IsAvailableChanged += this.Sensor_IsAvailableChanged;
+
+            // open the sensor
+            this.kinectSensor.Open();
+
+            // set the status text
+            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
+                                                            : Properties.Resources.NoSensorStatusText;
+
+            // use the window object as the view model in this simple example
+            this.DataContext = this;
+
+            // initialize the components (controls) of the window
+            this.InitializeComponent();
+
+            CannyThreshold = 100;
+            CannyThresholdLinking = 100;
+        }
 
         /// <summary>
         /// Execute shutdown tasks
@@ -216,7 +232,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 Marshal.FreeHGlobal(convertedColorDataPtr);
             }
         }
-
+        #endregion
+        #region colorframearrived
         /// <summary>
         /// Handles the color frame data arriving from the sensor
         /// </summary>
@@ -224,43 +241,217 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// <param name="e">event arguments</param>
         private async void Reader_ColorFrameArrived(object sender, ColorFrameArrivedEventArgs e)
         {
+            //fast return to check if color frame processing is enabled by the user
             if (!colorCheckBox.IsChecked ?? false) {
                 return;
-            }
-            // ColorFrame is IDisposable
+            }            
             using (ColorFrame colorFrame = e.FrameReference.AcquireFrame()) {
                 if(colorFrame != null) {
+                    //asynchronous call to speed up the execution
                     var processedFrameTuple = await ProcessColorFrame(colorFrame);
-                    //CvInvoke.Imshow("original", processedFrameTuple.Item1);
                     DisplayMatOnBitmap(processedFrameTuple.Item1, this.colorBitmap);
+                    //display the canny filtered image
                     CvInvoke.Imshow("edges", processedFrameTuple.Item2);
+                    //manually dispose the Mats (identical to using(...){...})
                     processedFrameTuple.Item1.Dispose();
                     processedFrameTuple.Item2.Dispose();
                 }
             }
         }
+        #endregion
+        #region processcolorframe
+        /// <summary>
+        /// Performs color based threshold on the color frame
+        /// </summary>
+        /// <param name="colorFrame"></param>
+        /// <returns></returns>
+        private async Task<Tuple<Mat, Mat>> ProcessColorFrame(ColorFrame colorFrame)
+        {
+            return await Task.Run(() =>
+            {
+                FrameDescription colorFrameDescription = colorFrame.FrameDescription;
 
+                using (KinectBuffer colorBuffer = colorFrame.LockRawImageBuffer()) {
+
+                    if (convertedColorDataPtr == IntPtr.Zero) {
+                        convertedColorDataPtr = Marshal.AllocHGlobal(4 * (int)colorFrameDescription.LengthInPixels);
+                    }
+
+                    colorFrame.CopyConvertedFrameDataToIntPtr(convertedColorDataPtr, 4 * colorFrameDescription.LengthInPixels, ColorImageFormat.Bgra);
+
+                    Mat resizedImage = new Mat();
+                    using (Mat convertedImage_Bgr = new Mat(colorFrameDescription.Height, colorFrameDescription.Width, DepthType.Cv8U, 3))
+                    using (Mat convertedImage_Bgra = new Mat(colorFrameDescription.Height, colorFrameDescription.Width, DepthType.Cv8U, 4, convertedColorDataPtr, colorFrameDescription.Width * 4)) {
+
+                        CvInvoke.CvtColor(convertedImage_Bgra, convertedImage_Bgr, ColorConversion.Bgra2Bgr);
+                        CvInvoke.Resize(convertedImage_Bgr, resizedImage, new System.Drawing.Size(imageSizeX, imageSizeY));
+
+
+                        if (inspectPosition != null) {
+                            InspectPixel(resizedImage);
+                        }
+                    }
+                    //return Tuple.Create(resizedImage, CannyShapeDetection(resizedImage));
+                    return Tuple.Create(resizedImage, ChromaShapeDetection(resizedImage));
+                }
+            });
+        }
+        #endregion
+        #region cannyshapedetection
+        private Mat CannyShapeDetection(Mat frame)
+        {
+            Mat returnImg = new Mat(frame.Rows, frame.Cols, frame.Depth, frame.NumberOfChannels);
+            CvInvoke.Canny(frame, returnImg, cannyThreshold, cannyThresholdLinking);
+
+            List<Triangle2DF> triangleList = new List<Triangle2DF>();
+
+            using (VectorOfVectorOfPoint contours = new VectorOfVectorOfPoint()) {
+                CvInvoke.FindContours(returnImg, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
+                int count = contours.Size;
+                for (int i = 0; i < count; i++) {
+                    using (VectorOfPoint contour = contours[i])
+                    using (VectorOfPoint approxContour = new VectorOfPoint()) {
+                        CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
+                        if (CvInvoke.ContourArea(approxContour, false) > 250) {
+                            if (approxContour.Size == 3) {
+                                var pts = approxContour.ToArray();
+                                triangleList.Add(new Triangle2DF(pts[0], pts[1], pts[2]));
+                            }
+                        }
+                    }
+                }
+            }
+            foreach (var triangle in triangleList) {
+                CvInvoke.Polylines(returnImg, Array.ConvertAll(triangle.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
+            }
+
+            return returnImg;
+        }
+        #endregion
+        #region chromashapedetection
+        private Mat ChromaShapeDetection(Mat frame)
+        {
+            Mat chromaFrame = new Mat(frame.Size, frame.Depth, frame.NumberOfChannels);
+
+            MCvScalar lowerLimit = new MCvScalar((filterHsv[0] - 5) % 180, 0, 0);//(filterHsv[1] - 100) % 255, (filterHsv[2] - 100) % 255);
+            MCvScalar upperLimit = new MCvScalar((filterHsv[0] + 5) % 180, 255, 255);//(filterHsv[1] + 100) % 255, (filterHsv[2] + 100) % 255);
+
+            using (Mat lowerLimits = new Mat(frame.Size, frame.Depth, frame.NumberOfChannels))
+            using (Mat upperLimits = new Mat(frame.Size, frame.Depth, frame.NumberOfChannels))
+            using (Mat hsvFrame = new Mat()) {
+                CvInvoke.CvtColor(frame, hsvFrame, ColorConversion.Bgr2Hsv);
+                lowerLimits.SetTo(lowerLimit);
+                upperLimits.SetTo(upperLimit);
+                CvInvoke.InRange(hsvFrame, lowerLimits, upperLimits, chromaFrame);
+                CvInvoke.MedianBlur(chromaFrame, chromaFrame, 7);
+            }
+
+            return chromaFrame;
+        }
+        #endregion
+        #region inspectpixel
+        private void InspectPixel(Mat mat)
+        {
+            if (inspectPosition == null)
+                return;
+
+            var colorPos = inspectPosition ?? new System.Drawing.Point(0, 0);
+            inspectPosition = null;
+
+            var image = mat.ToImage<Bgr, byte>();
+
+            var filterBgr = new byte[] { image.Data[colorPos.Y, colorPos.X, 0], image.Data[colorPos.Y, colorPos.X, 1], image.Data[colorPos.Y, colorPos.X, 2] };
+
+            Mat input = new Mat(1, 1, DepthType.Cv8U, 3);
+            Mat output = new Mat(1, 1, DepthType.Cv8U, 3);
+            input.SetTo(filterBgr);
+
+            CvInvoke.CvtColor(input, output, ColorConversion.Bgr2Hsv);
+
+            filterHsv = output.GetData();
+            Console.WriteLine($"R: {filterBgr[2]}, G: {filterBgr[1]}, B: {filterBgr[0]}");
+            Console.WriteLine($"H: {filterHsv[0]}, S: {filterHsv[1]}, V: {filterHsv[2]}");
+        }
+        #endregion
+        #region infraredframearrived
+        /// <summary>
+        /// Performs triangle detection on the infrared stream.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void Reader_InfraredFrameArrived(object sender, InfraredFrameArrivedEventArgs e)
         {
+            //check if infrared frame processing is enabled by the user
             if(!infraredCheckBox.IsChecked ?? false) {
                 return;
             }
-            using (InfraredFrame infraredFrame = e.FrameReference.AcquireFrame()) {
+            using (InfraredFrame infraredFrame = e.FrameReference.AcquireFrame()) {                
                 var infraredFrameDescription = this.infraredFrameReader.InfraredFrameSource.FrameDescription;
 
 				using (Mat infraredMat = new Mat(infraredFrameDescription.Height, infraredFrameDescription.Width, DepthType.Cv16U, 1)) {
-
+                    //convert to Emgu.CV.Mat
 					infraredFrame?.CopyFrameDataToIntPtr(infraredMat.DataPointer, infraredFrameDescription.LengthInPixels * 2);
-
+                    //main processing
 					TriangleFromInfrared(infraredMat);
-
+                    //display
 					CvInvoke.Imshow("infrared", infraredMat);
 				}					
             }
         }
+        #endregion
+        #region trianglefrominfrared
+        private Triangle2DF TriangleFromInfrared(Mat infraredMat)
+        {
+            Image<Gray, short> infraredImg = infraredMat.ToImage<Gray, short>();
+            var smoothedInfraredImg = infraredImg.PyrDown();
+            smoothedInfraredImg = smoothedInfraredImg.PyrUp();
 
+            using (Mat convertedMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1))
+            using (Mat multiplierMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1)) {
+                infraredImg.Mat.ConvertTo(convertedMat, DepthType.Cv8U, 1d / 256d);
+
+                multiplierMat.SetTo(new MCvScalar(infraMultiplier));
+
+                CvInvoke.Multiply(convertedMat, multiplierMat, convertedMat);
+
+                Mat thresholdMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1);
+                CvInvoke.Threshold(convertedMat, thresholdMat, 230, 255, ThresholdType.Binary);
+
+                List<Triangle2DF> triangleList = new List<Triangle2DF>();
+
+                using (VectorOfVectorOfPoint contours = new VectorOfVectorOfPoint()) {
+                    CvInvoke.FindContours(thresholdMat, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
+                    int count = contours.Size;
+                    for (int i = 0; i < count; i++) {
+                        using (VectorOfPoint contour = contours[i])
+                        using (VectorOfPoint approxContour = new VectorOfPoint()) {
+                            CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
+                            if (CvInvoke.ContourArea(approxContour, false) > 250) {
+                                if (approxContour.Size == 3) {
+                                    var pts = approxContour.ToArray();
+                                    triangleList.Add(new Triangle2DF(pts[0], pts[1], pts[2]));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                var biggestTri = triangleList.OrderBy((tri) => tri.Area).FirstOrDefault();
+                CvInvoke.Polylines(thresholdMat, Array.ConvertAll(biggestTri.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
+
+                foreach (var triangle in triangleList) {
+                    CvInvoke.Polylines(convertedMat, Array.ConvertAll(triangle.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
+                }
+                CvInvoke.Imshow("threshold", thresholdMat);
+
+                return biggestTri;
+
+            }
+        }
+        #endregion
         private void Reader_DepthFrameArrived(object sender, DepthFrameArrivedEventArgs e)
         {
+            //check if depth frame processing is enabled
             if(!depthCheckBox.IsChecked ?? false)
                 return;                        
 
@@ -292,168 +483,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             // on failure, set the status text
             this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
                                                             : Properties.Resources.SensorNotAvailableStatusText;
-        }
-				
-		private Triangle2DF TriangleFromInfrared(Mat infraredMat)
-		{
-			Image<Gray, short> infraredImg = infraredMat.ToImage<Gray, short>();
-			var smoothedInfraredImg = infraredImg.PyrDown();
-			smoothedInfraredImg = smoothedInfraredImg.PyrUp();					
-
-			using (Mat convertedMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1))
-            using (Mat multiplierMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1))
-            {
-                infraredImg.Mat.ConvertTo(convertedMat, DepthType.Cv8U, 1d / 256d);
-
-                multiplierMat.SetTo(new MCvScalar(infraMultiplier));
-
-                CvInvoke.Multiply(convertedMat, multiplierMat, convertedMat);
-                //CvInvoke.Imshow("infrared -> converted", convertedMat);
-
-                Mat thresholdMat = new Mat(infraredMat.Size, DepthType.Cv8U, 1);
-                CvInvoke.Threshold(convertedMat, thresholdMat, 230, 255, ThresholdType.Binary);
-                //CvInvoke.Imshow("infrared -> converted -> threshold", thresholdMat);
-
-                //CvInvoke.Canny(thresholdMat, cannyMat, cannyThreshold, cannyThresholdLinking);
-
-                #region triangles
-                List<Triangle2DF> triangleList = new List<Triangle2DF>();
-
-                using (VectorOfVectorOfPoint contours = new VectorOfVectorOfPoint()) {
-                    CvInvoke.FindContours(thresholdMat, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
-                    int count = contours.Size;
-                    for (int i = 0; i < count; i++) {
-                        using (VectorOfPoint contour = contours[i])
-                        using (VectorOfPoint approxContour = new VectorOfPoint()) {
-                            CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
-                            if (CvInvoke.ContourArea(approxContour, false) > 250) {
-                                if (approxContour.Size == 3) {
-                                    var pts = approxContour.ToArray();
-                                    triangleList.Add(new Triangle2DF(pts[0], pts[1], pts[2]));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                var biggestTri = triangleList.OrderBy((tri) => tri.Area).FirstOrDefault();
-                //CvInvoke.Polylines(thresholdMat, Array.ConvertAll(biggestTri.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
-
-                //foreach (var triangle in triangleList) {
-                //    CvInvoke.Polylines(cannyMat, Array.ConvertAll(triangle.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
-                //}            
-                //CvInvoke.Imshow("threshold", thresholdMat);
-
-                return biggestTri;
-                
-                #endregion
-            }
-        }
-
-		private async Task<Tuple<Mat, Mat>> ProcessColorFrame (ColorFrame colorFrame)
-        {
-            return await Task.Run(() =>
-            {
-                FrameDescription colorFrameDescription = colorFrame.FrameDescription;
-
-                using (KinectBuffer colorBuffer = colorFrame.LockRawImageBuffer()) {
-
-                    if (convertedColorDataPtr == IntPtr.Zero) {
-                        convertedColorDataPtr = Marshal.AllocHGlobal(4 * (int)colorFrameDescription.LengthInPixels);
-                    }
-
-                    colorFrame.CopyConvertedFrameDataToIntPtr(convertedColorDataPtr, 4 * colorFrameDescription.LengthInPixels, ColorImageFormat.Bgra);
-
-                    Mat resizedImage = new Mat();
-                    using (Mat convertedImage_Bgr = new Mat(colorFrameDescription.Height, colorFrameDescription.Width, DepthType.Cv8U, 3))
-                    using (Mat convertedImage_Bgra = new Mat(colorFrameDescription.Height, colorFrameDescription.Width, DepthType.Cv8U, 4, convertedColorDataPtr, colorFrameDescription.Width * 4)) {
-
-                        CvInvoke.CvtColor(convertedImage_Bgra, convertedImage_Bgr, ColorConversion.Bgra2Bgr);
-                        CvInvoke.Resize(convertedImage_Bgr, resizedImage, new System.Drawing.Size(imageSizeX, imageSizeY));
-
-
-                        if(inspectPosition != null) {
-                            InspectPixel(resizedImage);
-                        }
-                    }
-                    //return Tuple.Create(resizedImage, CannyShapeDetection(resizedImage));
-                    return Tuple.Create(resizedImage, ChromaShapeDetection(resizedImage));
-                }
-            });            
-        }
-
-        private Mat CannyShapeDetection(Mat frame)
-        {
-            Mat returnImg = new Mat(frame.Rows, frame.Cols, frame.Depth, frame.NumberOfChannels);
-            CvInvoke.Canny(frame, returnImg, cannyThreshold, cannyThresholdLinking);                                    
-
-            List<Triangle2DF> triangleList = new List<Triangle2DF>();
-
-            using (VectorOfVectorOfPoint contours = new VectorOfVectorOfPoint()) {
-                CvInvoke.FindContours(returnImg, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
-                int count = contours.Size;
-                for (int i = 0; i < count; i++) {
-                    using (VectorOfPoint contour = contours[i])
-                    using (VectorOfPoint approxContour = new VectorOfPoint()) {
-                        CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
-                        if (CvInvoke.ContourArea(approxContour, false) > 250) {
-                            if (approxContour.Size == 3) {
-                                var pts = approxContour.ToArray();
-                                triangleList.Add(new Triangle2DF(pts[0], pts[1], pts[2]));
-                            }
-                        }
-                    }
-                }
-            }
-            foreach (var triangle in triangleList) {
-                CvInvoke.Polylines(returnImg, Array.ConvertAll(triangle.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
-            }
-            
-            return returnImg;
-        }
-
-        private Mat ChromaShapeDetection(Mat frame)
-        {
-            Mat chromaFrame = new Mat(frame.Size, frame.Depth, frame.NumberOfChannels);
-
-            MCvScalar lowerLimit = new MCvScalar((filterHsv[0] - 5) % 180, 0, 0);//(filterHsv[1] - 100) % 255, (filterHsv[2] - 100) % 255);
-            MCvScalar upperLimit = new MCvScalar((filterHsv[0] + 5) % 180, 255, 255);//(filterHsv[1] + 100) % 255, (filterHsv[2] + 100) % 255);
-
-            using (Mat lowerLimits = new Mat(frame.Size, frame.Depth, frame.NumberOfChannels))
-            using (Mat upperLimits = new Mat(frame.Size, frame.Depth, frame.NumberOfChannels))
-            using (Mat hsvFrame = new Mat()) {
-                CvInvoke.CvtColor(frame, hsvFrame, ColorConversion.Bgr2Hsv);
-                lowerLimits.SetTo(lowerLimit);
-                upperLimits.SetTo(upperLimit);
-                CvInvoke.InRange(hsvFrame, lowerLimits, upperLimits, chromaFrame);
-                CvInvoke.MedianBlur(chromaFrame, chromaFrame, 7);                
-            }
-
-            return chromaFrame;   
-        }
-
-        private void InspectPixel(Mat mat)
-        {
-            if (inspectPosition == null)
-                return;
-
-            var colorPos = inspectPosition ?? new System.Drawing.Point(0, 0);
-            inspectPosition = null;
-
-            var image = mat.ToImage<Bgr, byte>();
-
-            var filterBgr = new byte[] { image.Data[colorPos.Y, colorPos.X, 0], image.Data[colorPos.Y, colorPos.X, 1], image.Data[colorPos.Y, colorPos.X, 2] };       
-
-            Mat input = new Mat(1, 1, DepthType.Cv8U, 3);
-            Mat output = new Mat(1, 1, DepthType.Cv8U, 3);
-            input.SetTo(filterBgr);
-
-            CvInvoke.CvtColor(input, output, ColorConversion.Bgr2Hsv);
-
-            filterHsv = output.GetData();
-            Console.WriteLine($"R: {filterBgr[2]}, G: {filterBgr[1]}, B: {filterBgr[0]}");
-            Console.WriteLine($"H: {filterHsv[0]}, S: {filterHsv[1]}, V: {filterHsv[2]}");
-        }
+        }					
 
         private void DisplayMatOnBitmap (Mat mat, WriteableBitmap bitmap)
         {
