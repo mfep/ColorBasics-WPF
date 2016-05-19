@@ -66,8 +66,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// <summary>
         /// Bitmap to display
         /// </summary>
-        private WriteableBitmap colorBitmap = null;
-
+        private WriteableBitmap bitmap1 = null;
+        private WriteableBitmap bitmap2 = null;
         /// <summary>
         /// Current status text to display
         /// </summary>
@@ -81,11 +81,30 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// <summary>
         /// Gets the bitmap to display
         /// </summary>
-        public ImageSource ImageSource
+        public ImageSource ImageSource1
         {
             get
             {
-                return this.colorBitmap;
+                return this.bitmap1;
+            }
+        }
+        public ImageSource ImageSource2
+        {
+            get
+            {
+                return this.bitmap2;
+            }
+        }
+        private string outText = "";
+        public string OutText
+        {
+            get
+            {
+                return outText;
+            }
+            set
+            {
+
             }
         }
         double cannyThreshold = 200.0;
@@ -188,8 +207,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             FrameDescription colorFrameDescription = this.kinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
 
             // create the bitmap to display
-            this.colorBitmap = new WriteableBitmap(imageSizeX, imageSizeY, 96.0, 96.0, PixelFormats.Bgr24, null);
-
+            this.bitmap1 = new WriteableBitmap(imageSizeX, imageSizeY, 96.0, 96.0, PixelFormats.Bgr24, null);
+            this.bitmap2 = new WriteableBitmap(imageSizeX, imageSizeY, 96.0, 96.0, PixelFormats.Bgr24, null);
             // set IsAvailableChanged event notifier
             this.kinectSensor.IsAvailableChanged += this.Sensor_IsAvailableChanged;
 
@@ -242,16 +261,17 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private async void Reader_ColorFrameArrived(object sender, ColorFrameArrivedEventArgs e)
         {
             //fast return to check if color frame processing is enabled by the user
-            if (!colorCheckBox.IsChecked ?? false) {
+            if (!colorRadioButton.IsChecked ?? false) {
                 return;
             }            
             using (ColorFrame colorFrame = e.FrameReference.AcquireFrame()) {
                 if(colorFrame != null) {
                     //asynchronous call to speed up the execution
                     var processedFrameTuple = await ProcessColorFrame(colorFrame);
-                    DisplayMatOnBitmap(processedFrameTuple.Item1, this.colorBitmap);
+                    DisplayMatOnBitmap(processedFrameTuple.Item1, this.bitmap1);
                     //display the canny filtered image
-                    CvInvoke.Imshow("edges", processedFrameTuple.Item2);
+                    //CvInvoke.Imshow("edges", processedFrameTuple.Item2);
+                    DisplayMatOnBitmap(processedFrameTuple.Item2, bitmap2);
                     //manually dispose the Mats (identical to using(...){...})
                     processedFrameTuple.Item1.Dispose();
                     processedFrameTuple.Item2.Dispose();
@@ -382,7 +402,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private void Reader_InfraredFrameArrived(object sender, InfraredFrameArrivedEventArgs e)
         {
             //check if infrared frame processing is enabled by the user
-            if(!infraredCheckBox.IsChecked ?? false) {
+            if(!infraredRadioButton.IsChecked ?? false) {
                 return;
             }
             using (InfraredFrame infraredFrame = e.FrameReference.AcquireFrame()) {                
@@ -442,7 +462,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 foreach (var triangle in triangleList) {
                     CvInvoke.Polylines(convertedMat, Array.ConvertAll(triangle.GetVertices(), System.Drawing.Point.Round), true, new MCvScalar(255));
                 }
-                CvInvoke.Imshow("threshold", thresholdMat);
+                //CvInvoke.Imshow("threshold", thresholdMat);
 
                 return biggestTri;
 
@@ -453,7 +473,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private void Reader_DepthFrameArrived(object sender, DepthFrameArrivedEventArgs e)
         {
             //check if depth frame processing is enabled
-            if(!depthCheckBox.IsChecked ?? false)
+            if(!depthRadioButton.IsChecked ?? false)
                 return;                        
 
             using(DepthFrame depthFrame = e.FrameReference.AcquireFrame()) {
@@ -490,20 +510,23 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         {
             bitmap.Lock();
 
-            colorBitmap.WritePixels(new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight), mat.DataPointer, bitmap.PixelWidth * bitmap.PixelHeight * 3, mat.Step);
-            colorBitmap.AddDirtyRect(new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
+            bitmap.WritePixels(new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight), mat.DataPointer, bitmap.PixelWidth * bitmap.PixelHeight * 3, mat.Step);
+            bitmap.AddDirtyRect(new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
 
             bitmap.Unlock();
         }
         #endregion
         private void Image_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            var pos = e.GetPosition(this.colorImage);
+            var pos = e.GetPosition(this.image1);
             inspectPosition = new System.Drawing.Point((int)Math.Round(pos.X), (int)Math.Round(pos.Y));                        
         }
         #region multisourceframearrived
         private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
         {
+            if (!multiRadioButton.IsChecked ?? false)
+                return;
+
             var multiFrame = e.FrameReference.AcquireFrame();
 
             using (var infraredFrame = multiFrame.InfraredFrameReference.AcquireFrame())
@@ -527,8 +550,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     var tri = TriangleFromInfrared(infraredMat);
 
                     DisplayDepthHSV(depthMat);
-                    CalculateNormal(depthMat, tri);
-                    CvInvoke.Imshow("triangle", DisplayTriangleOnInfrared(infraredMat, tri));
+                    //CalculateNormal(depthMat, tri);
+                    //CvInvoke.Imshow("triangle", DisplayTriangleOnInfrared(infraredMat, tri));
+                    DisplayMatOnBitmap(DisplayTriangleOnInfrared(infraredMat, tri), bitmap2);
                 }
             }
         }
@@ -599,7 +623,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
                 CvInvoke.CvtColor(hsvMat8U3, hsvMat8U3, ColorConversion.Hsv2Bgr);                
 
-                DisplayMatOnBitmap(hsvMat8U3, this.colorBitmap);
+                DisplayMatOnBitmap(hsvMat8U3, this.bitmap1);
                 InspectDepthPixel(depthMat16U);
             }
         }
@@ -615,8 +639,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 return;
 
             Console.WriteLine($"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}");
+            outText += $"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}" + Environment.NewLine;
             var worldPos = CalculateWorldPosition(pos.X, pos.Y, depthMat16U.Cols, GetMatElementU16(depthMat16U, pos.X, pos.Y));
             Console.WriteLine($"Clicked World pos: X:{worldPos.x} Y:{worldPos.y} Z:{worldPos.z}");
+            outText += $"Clicked World pos: X:{worldPos.x.ToString("F3")} Y:{worldPos.y.ToString("F3")} Z:{worldPos.z}" + Environment.NewLine;
+            textBox.Text = outText;
             inspectPosition = null;
         }
         private unsafe ushort GetMatElementU16(Mat mat, int x, int y)
@@ -634,5 +661,24 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             cameraSpaceTable = kinectSensor.CoordinateMapper.GetDepthFrameToCameraSpaceTable();
         }
         #endregion
+        private void CloseCVWindows()
+        {
+            CvInvoke.DestroyAllWindows();
+        }
+
+        private void colorRadioButton_Checked(object sender, RoutedEventArgs e)
+        {
+            CloseCVWindows();
+        }
+
+        private void infraredRadioButton_Checked(object sender, RoutedEventArgs e)
+        {
+            CloseCVWindows();
+        }
+
+        private void depthRadioButton_Checked(object sender, RoutedEventArgs e)
+        {
+            CloseCVWindows();
+        }
     }
 }
