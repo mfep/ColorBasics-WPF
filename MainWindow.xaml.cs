@@ -449,6 +449,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             }
         }
         #endregion
+        #region depthframearrived
         private void Reader_DepthFrameArrived(object sender, DepthFrameArrivedEventArgs e)
         {
             //check if depth frame processing is enabled
@@ -472,7 +473,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 }
             }
         }
-
+        #endregion
         /// <summary>
         /// Handles the event which the sensor becomes unavailable (E.g. paused, closed, unplugged).
         /// </summary>
@@ -483,8 +484,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             // on failure, set the status text
             this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
                                                             : Properties.Resources.SensorNotAvailableStatusText;
-        }					
-
+        }
+        #region displaymatonbitmap
         private void DisplayMatOnBitmap (Mat mat, WriteableBitmap bitmap)
         {
             bitmap.Lock();
@@ -494,13 +495,13 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             bitmap.Unlock();
         }
-
+        #endregion
         private void Image_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             var pos = e.GetPosition(this.colorImage);
             inspectPosition = new System.Drawing.Point((int)Math.Round(pos.X), (int)Math.Round(pos.Y));                        
         }
-
+        #region multisourceframearrived
         private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
         {
             var multiFrame = e.FrameReference.AcquireFrame();
@@ -525,17 +526,13 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
                     var tri = TriangleFromInfrared(infraredMat);
 
-                    //CvInvoke.FillConvexPoly(triMaskMat, new VectorOfPoint(Array.ConvertAll(tri.GetVertices(), System.Drawing.Point.Round)), new MCvScalar(255));
-
                     DisplayDepthHSV(depthMat);
                     CalculateNormal(depthMat, tri);
                     CvInvoke.Imshow("triangle", DisplayTriangleOnInfrared(infraredMat, tri));
-                    //CvInvoke.Imshow("infrared", infraredMat);
-                    //CvInvoke.Imshow("depth", depthMat);
                 }
             }
         }
-
+        #endregion
         private void CalculateNormal(Mat depthMat, Triangle2DF tri)
         {
             if (depthMat == null || (tri.Centeroid.X == 0 && tri.Centeroid.Y == 0))
@@ -583,7 +580,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 return displayMat;
             }
         }
-
+        #region displaydepthhsv
         private void DisplayDepthHSV(Mat depthMat16U)
         {
             if (depthMat16U == null)
@@ -606,7 +603,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 InspectDepthPixel(depthMat16U);
             }
         }
-
+        #endregion
+        #region worldposition
         private void InspectDepthPixel(Mat depthMat16U)
         {
             if (inspectPosition == null || depthMat16U == null)
@@ -616,27 +614,25 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             if (pos.X >= depthMat16U.Cols || pos.Y >= depthMat16U.Rows)
                 return;
 
-            //Console.WriteLine($"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}");
+            Console.WriteLine($"Depth value at X:{pos.X} Y:{pos.Y} is {GetMatElementU16(depthMat16U, pos.X, pos.Y)}");
             var worldPos = CalculateWorldPosition(pos.X, pos.Y, depthMat16U.Cols, GetMatElementU16(depthMat16U, pos.X, pos.Y));
             Console.WriteLine($"Clicked World pos: X:{worldPos.x} Y:{worldPos.y} Z:{worldPos.z}");
             inspectPosition = null;
         }
-
-        private Kolos.Pont3d CalculateWorldPosition(int screenX, int screenY, int width, ushort depthValue)
-        {
-            PointF lookupValue = cameraSpaceTable[screenX + screenY * width];
-            return new Kolos.Pont3d(lookupValue.X * depthValue, lookupValue.Y * depthValue, depthValue);
-        }
-
-        private void CoordinateMappingChangedCallback(object sender, CoordinateMappingChangedEventArgs args)
-        {
-            cameraSpaceTable = kinectSensor.CoordinateMapper.GetDepthFrameToCameraSpaceTable();
-        }
-
-        private unsafe ushort GetMatElementU16(Mat mat, int x, int y)            
+        private unsafe ushort GetMatElementU16(Mat mat, int x, int y)
         {
             ushort* dataPtr = (ushort*)mat.DataPointer;
             return *(dataPtr + x + mat.Cols * y);
         }
+        private MathUtil.Pont3d CalculateWorldPosition(int screenX, int screenY, int width, ushort depthValue)
+        {
+            PointF lookupValue = cameraSpaceTable[screenX + screenY * width];
+            return new MathUtil.Pont3d(lookupValue.X * depthValue, lookupValue.Y * depthValue, depthValue);
+        }
+        private void CoordinateMappingChangedCallback(object sender, CoordinateMappingChangedEventArgs args)
+        {
+            cameraSpaceTable = kinectSensor.CoordinateMapper.GetDepthFrameToCameraSpaceTable();
+        }
+        #endregion
     }
 }

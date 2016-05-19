@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
-namespace Kolos
+namespace MathUtil
 {
     public struct Pont3d
     {
